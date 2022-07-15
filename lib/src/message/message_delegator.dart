@@ -15,6 +15,7 @@ class MessageDelegator {
   //TODO handle wrong protocols, versions, and more...
   Future<void> delegate(Uint8List uint8list, Socket socket) async {
     final type = MessageTypeUtil.valueOf(uint8list[0] >> 4);
+
     switch (type) {
       case MessageType.publish:
         publishDecoder.decode(uint8list, socket);
@@ -48,6 +49,21 @@ class MessageDelegator {
         disconnectDecoder.decode(uint8list, socket);
         break;
       case MessageType.auth:
+        // TODO: Handle this case.
+        break;
+      case MessageType.reserved:
+        // TODO: Handle this case.
+        break;
+      case MessageType.connack:
+        // TODO: Handle this case.
+        break;
+      case MessageType.suback:
+        // TODO: Handle this case.
+        break;
+      case MessageType.unsuback:
+        // TODO: Handle this case.
+        break;
+      case MessageType.pingresp:
         // TODO: Handle this case.
         break;
     }

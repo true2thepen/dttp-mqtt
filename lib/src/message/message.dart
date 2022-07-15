@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:dttp_mqtt/src/client.dart';
 
 import '../session_manager.dart';
 import 'message_enums.dart';
+import '../utils/utils.dart';
 
 enum ProtocolVersion {
   mqtt_3_1_1,
@@ -57,7 +59,8 @@ class ConnackMessage extends Message with RequestMessage {
 
   @override
   Uint8List toByte() {
-    final variableHeader = Uint8List.fromList([cleanSession ? 0 : 1, returnCode.index]);
+    final variableHeader =
+        Uint8List.fromList([cleanSession ? 0 : 1, returnCode.index]);
     final bytes = Uint8List.fromList([
       type.fixedHeader(),
       variableHeader.lengthInBytes,
@@ -80,7 +83,8 @@ class SubackMessage extends Message with RequestMessage {
 
   @override
   Uint8List toByte() {
-    final variableHeader = Uint16List.fromList([packetIdentifier]).buffer.asUint8List();
+    final variableHeader =
+        Uint16List.fromList([packetIdentifier]).buffer.asUint8List();
     final payload = Uint8List.fromList(qoss);
     final bytes = Uint8List.fromList([
       type.fixedHeader(),
@@ -115,19 +119,31 @@ class PublishMessage extends Message with ResponseMessage, RequestMessage {
         : (qos == 1)
             ? 2
             : 0;
+    // print('qosShift is ' + qosShift.toString());
     int shift = duplicateFlag * 8 + qosShift + retain;
+
     final topicBytes = utf8.encode(topic);
+    
+
+
     final variableHeader = Uint8List.fromList([
       ...Uint16List.fromList([topicBytes.length]).buffer.asUint8List().reversed,
       ...topicBytes
     ]);
-    //TODO support packet identifier
+    //Added support packet identifier
+    var byte1 = packetIdentifier & 0xff;
+    var byte2 = (packetIdentifier >> 8) & 0xff;
+    
     final bytes = Uint8List.fromList([
       type.fixedHeader(shift),
-      variableHeader.lengthInBytes + payload.lengthInBytes,
+      variableHeader.lengthInBytes + payload.lengthInBytes + 2, // 2 for the packet identifier
       ...variableHeader,
+      byte2,
+      byte1,
       ...payload
     ]);
+    // print('Bytes follow:');
+    // print(bytes);
     return bytes;
   }
 }
@@ -135,20 +151,20 @@ class PublishMessage extends Message with ResponseMessage, RequestMessage {
 class UnsubackMessage extends Message with RequestMessage {
   final int packetIdentifier;
 
-  UnsubackMessage({required this.packetIdentifier}) : super(type: MessageType.unsuback);
+  UnsubackMessage({required this.packetIdentifier})
+      : super(type: MessageType.unsuback);
 
   @override
   Uint8List toByte() {
-    final variableHeader = Uint16List.fromList([packetIdentifier]).buffer.asUint8List();
+    final variableHeader =
+        Uint16List.fromList([packetIdentifier]).buffer.asUint8List();
     return Uint8List.fromList(
         [type.fixedHeader(), variableHeader.lengthInBytes, ...variableHeader]);
   }
 }
 
 extension Bits on int {
-  /**
-   * Returns true if bit is 1 else false
-   */
+  /// Returns true if bit is 1 else false
   bool isBitSet(final int position) {
     return (this & (1 << position)) != 0;
   }
@@ -177,67 +193,229 @@ extension ConnectReturnCodeUtil on ConnectReturnCode {
 class ConnectMessageDecoder extends MessageDecoder {
   @override
   Future<ConnackMessage> decode(Uint8List uint8list, Socket socket) async {
-    //print(uint8list.asMap());
-
+//    print(uint8list.asMap());
+//    print(uint8list.toString());
+//
     int currentIndex = 8;
+//
+    var protocolVersion =
+        ProtocolVersionUtil.getProtocolVersion(uint8list[currentIndex]).name;
+//    print('version: ' + protocolVersion);
 
-    // print('version: ' + ProtocolVersionUtil.getProtocolVersion(uint8list[currentIndex]).name);
     currentIndex++;
-
-    // print('number of bytes: ' + uint8list.length.toString());
+//
+//    print('number of bytes: ' + uint8list.length.toString());
     final bits = uint8list[currentIndex].toRadixString(2);
-    // print('connect flag bits: ' + bits);
+    //
+//    print('connect flag bits: ' + bits);
     final cleanSession = uint8list[currentIndex].isBitSet(1);
-    // print('clean session: ' + cleanSession.toString());
+    //
+//    print('clean session: ' + cleanSession.toString());
     final cleanWill = uint8list[currentIndex].isBitSet(2);
-    // print('clean will flag: ' + cleanWill.toString());
+    //
+//    print('clean will flag: ' + cleanWill.toString());
     final willQos = (uint8list[currentIndex].isBitSet(3)
         ? 1
         : 0 + (uint8list[currentIndex].isBitSet(4) ? 1 : 0));
-    // print('will qos: ' + (willQos.toString()));
+    //
+//    print('will qos: ' + (willQos.toString()));
     final willRetain = uint8list[currentIndex].isBitSet(5);
-    // print('will retain: ' + willRetain.toString());
+    //
+//    print('will retain: ' + willRetain.toString());
     final passwordFlag = uint8list[currentIndex].isBitSet(6);
-    // print('password flag: ' + passwordFlag.toString());
+    //
+//    print('password flag: ' + passwordFlag.toString());
     final usernameFlag = uint8list[currentIndex].isBitSet(7);
-    // print('user name flag $usernameFlag');
+    //
+//    print('user name flag $usernameFlag');
 
     currentIndex++;
-    final keepAliveSeconds =
-        Uint8List.fromList([uint8list[currentIndex++], uint8list[currentIndex++]])
-            .buffer
-            .asByteData()
-            .getUint16(0)
-            .toString();
-    // print('Keep alive: ' + keepAliveSeconds);
+    final keepAliveSeconds = Uint8List.fromList(
+            [uint8list[currentIndex++], uint8list[currentIndex++]])
+        .buffer
+        .asByteData()
+        .getUint16(0)
+        .toString();
+    //
+//    print('Keep alive: ' + keepAliveSeconds);
 
-    final clientIdStringLength =
-        uint8list.sublist(currentIndex++, ++currentIndex).buffer.asByteData().getUint16(0);
-    final clientIdString =
-        utf8.decode(uint8list.sublist(currentIndex, currentIndex + clientIdStringLength));
+    // Version 5 needs to get the following before getting the clientID
+    if (protocolVersion == 'mqtt_5') {
+      var connectPropertiesLength =
+          uint8list.sublist(currentIndex++).buffer.asByteData().getUint8(0);
+//      print('Length Connection Properties: ' +
+//          connectPropertiesLength.toString());
+      // Cycle through the connectionPropertiesLength until it is empty
+      while (connectPropertiesLength > 0) {
+        // Next byte is connection property type followed by x bytes
 
-    // print('client id: ' + clientIdString);
+        var controlPropertyType =
+            uint8list.sublist(currentIndex++).buffer.asByteData().getUint8(0);
+        connectPropertiesLength--;
+        switch (controlPropertyType) {
+          case 17:
+            // four byte value for Session Expiry Interval
+            // must only be present once
+            var controlPropertySEI = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint32(0);
+//            print('Control Request Response Information: ' +
+//                controlPropertySEI.toString());
+            connectPropertiesLength =
+                connectPropertiesLength - 4; // Remove 4 bytes for SEI
+            currentIndex = currentIndex + 3; // Move index 3 bytes for SEI
+            break;
+
+          case 33:
+            // 2 byte value for Receive Maximum
+            // must only be present once
+            var controlPropertyRM = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint16(0);
+//            print('Control Receive Maximum: ' + controlPropertyRM.toString());
+            connectPropertiesLength =
+                connectPropertiesLength - 2; // Remove 2 bytes for RM
+            currentIndex = currentIndex + 1;
+            break;
+
+          case 39:
+            // 4 byte value for Maximum Packet Size
+            // must only be present once
+            var controlPropertyMPS = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint32(0);
+//            print('Control Maximum Packet Size: ' +
+//                controlPropertyMPS.toString());
+            connectPropertiesLength =
+                connectPropertiesLength - 4; // Remove 2 bytes for MPS
+            currentIndex = currentIndex + 3;
+            break;
+
+          case 34:
+            // 2 byte value for Topic Alias Maximum
+            // must only be present once
+            var controlPropertyTAM = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint16(0);
+//            print('Control Topic Alias Maximum: ' +
+//                controlPropertyTAM.toString());
+            connectPropertiesLength =
+                connectPropertiesLength - 2; // Remove 2 bytes for TAM
+            currentIndex++;
+            break;
+
+          case 25:
+            // one byte value for Request Response Information
+            // valid values are 0 and 1
+            // must only be present once
+            var controlPropertyRRI = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint8(0);
+//            print('Control Request Response Information: ' +
+//                controlPropertyRRI.toString());
+            connectPropertiesLength--; // Remove byte for RRI
+            break;
+
+          case 23:
+            // one byte value for Request Problem Information
+            // valid values are 0 and 1
+            // must only be present once
+            var controlPropertyRPI = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint8(0);
+//            print('Control Request Problem Information: ' +
+//                controlPropertyRPI.toString());
+            connectPropertiesLength--; // Remove byte for RPI
+            break;
+
+          // TODO Handle User Key/Value
+          case 38:
+            // variable byte key/value pairs
+            // can be seen multiple times
+            // first two bytes give length of key
+            // once key is read the next two give length of value
+            var keyLength = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint16(0);
+            currentIndex++;
+//            print('Key length: ' + keyLength.toString());
+            currentIndex = currentIndex + keyLength;
+            var valueLength = uint8list
+                .sublist(currentIndex++)
+                .buffer
+                .asByteData()
+                .getUint16(0);
+//            print('Value Length: ' + valueLength.toString());
+            currentIndex = currentIndex + valueLength + 1;
+            connectPropertiesLength =
+                connectPropertiesLength - keyLength - valueLength - 4;
+//            print('connectionPropertiesLength: ' +
+//                connectPropertiesLength.toString());
+            break;
+
+          // TODO Handle Authentication DATA
+          case 22:
+            break;
+
+          default:
+        }
+      }
+    }
+    print(uint8list.sublist(currentIndex).buffer.asByteData().getInt8(0));
+
+    final clientIdStringLength = uint8list
+        .sublist(currentIndex++, ++currentIndex)
+        .buffer
+        .asByteData()
+        .getUint16(0);
+
+//    print('clientIdStringLength:' + clientIdStringLength.toString());
+
+    final clientIdString = utf8.decode(
+        uint8list.sublist(currentIndex, currentIndex + clientIdStringLength));
+
+    //
+//    print('client id: ' + clientIdString);
 
     currentIndex += clientIdStringLength;
 
     if (usernameFlag) {
-      final usernameLength = uint8list.buffer.asByteData(currentIndex++).getUint16(0);
+      final usernameLength =
+          uint8list.buffer.asByteData(currentIndex++).getUint16(0);
       currentIndex++;
-      final usernameString =
-          utf8.decode(uint8list.sublist(currentIndex, currentIndex + usernameLength));
+      final usernameString = utf8.decode(
+          uint8list.sublist(currentIndex, currentIndex + usernameLength));
       currentIndex += usernameLength;
-      // print('username: ' + usernameString);
+      //
+//      print('username: ' + usernameString);
     }
 
-    // print(currentIndex);
+    //
+//    print(currentIndex);
 
     if (passwordFlag) {
-      final passwordLength = uint8list.buffer.asByteData(currentIndex++).getUint16(0);
-      final passwordString =
-          utf8.decode(uint8list.sublist(++currentIndex, currentIndex + passwordLength));
+      final passwordLength =
+          uint8list.buffer.asByteData(currentIndex++).getUint16(0);
+      final passwordString = utf8.decode(
+          uint8list.sublist(++currentIndex, currentIndex + passwordLength));
       currentIndex += passwordLength;
 
-      // print('password: $passwordString');
+      //
+//      print('password: $passwordString');
     }
 
     //TODO implement will topic
@@ -245,10 +423,12 @@ class ConnectMessageDecoder extends MessageDecoder {
       //TODO check flags and send error to socket
     }
 
-    SessionManager.instance.sessions.add(Client(clientId: clientIdString, socket: socket));
+    SessionManager.instance.sessions.add(Client(
+        clientId: clientIdString, socket: socket, protocol: protocolVersion));
 
     final connack = ConnackMessage(
-        cleanSession: cleanSession, returnCode: ConnectReturnCode.connectionAccepted);
+        cleanSession: cleanSession,
+        returnCode: ConnectReturnCode.connectionAccepted);
 
     return connack;
   }
@@ -275,6 +455,10 @@ class SubscriptionManager {
       subscriptions[client] = {};
     }
     subscriptions[client]!.add(subscription);
+    print('Setting subscription - ' +
+        subscription.topic +
+        ' for client: ' +
+        client.clientId);
   }
 
   void addAll(Client client, List<Subscription> subscriptions) {
@@ -284,60 +468,124 @@ class SubscriptionManager {
   }
 }
 
+
+//TODO: Handle wildcard subcriptions 
 class SubscribeMessageDecoder implements MessageDecoder {
   @override
   Future<SubackMessage> decode(Uint8List uint8list, Socket socket) async {
     final buffer = uint8list.buffer;
-    // print(uint8list.asMap());
-    int currentIndex = 2;
+    //
+    String clientProtocol = SessionManager.instance.getClient(socket).protocol;
+    int currentIndex = 0;
+//    print(uint8list.asMap());
+//    print(uint8list.toString());
+    var mqttControlByte =
+        uint8list.buffer.asByteData(currentIndex, 1).getUint8(0);
+    if (mqttControlByte != 130) {
+      // Control byte is not a subscribe, bail
+      print('Bad control byte of ' + mqttControlByte.toString());
+    }
 
-    final packetIdentifier = buffer.asByteData(currentIndex, 2).getUint16(0);
-    // print('packet identifier: $packetIdentifier');
     currentIndex++;
+    var decodedVariableByteHeader = decodeVariableByte(uint8list, currentIndex);
+    currentIndex = decodedVariableByteHeader['index']!;
+    var headerLength = decodedVariableByteHeader['decodedVariableByte'];
+//    print('Current Index from encoding: ' + currentIndex.toString());
+//    print('Header Length from encoding: ' + headerLength.toString());
+    final packetIdentifier = buffer.asByteData(currentIndex, 2).getUint16(0);
+    //
+//    print('packet identifier: $packetIdentifier');
+    currentIndex++;
+    // TODO: Figure why the extra byte before payload in protocol 5
+    if (clientProtocol == 'mqtt_5') {
+      currentIndex++;
+    }
 
-    // print(buffer.lengthInBytes);
+    //print(buffer.lengthInBytes);
 
     final List<String> topics = [];
 
     final List<Subscription> subscriptions = [];
 
     // print(currentIndex);
+
     ///payload
     while (currentIndex < buffer.lengthInBytes - 1) {
       currentIndex++;
       int payloadLength = buffer.asByteData(currentIndex, 2).getUint16(0);
       currentIndex += 2;
-      final topic = utf8.decode(buffer.asUint8List(currentIndex, payloadLength));
+      final topic =
+          utf8.decode(buffer.asUint8List(currentIndex, payloadLength));
       topics.add(topic);
+//      print(topic);
       currentIndex += payloadLength;
       final qos = buffer.asByteData(currentIndex, 1).getUint8(0);
       subscriptions.add(Subscription(qos: qos, topic: topic));
     }
 
-    SubscriptionManager.instance.addAll(SessionManager.instance.getClient(socket), subscriptions);
+    SubscriptionManager.instance
+        .addAll(SessionManager.instance.getClient(socket), subscriptions);
     final suback = SubackMessage(
-        qoss: subscriptions.map((e) => e.qos).toList(), packetIdentifier: packetIdentifier);
+        qoss: subscriptions.map((e) => e.qos).toList(),
+        packetIdentifier: packetIdentifier);
     socket.add(suback.toByte());
     return suback;
   }
 }
 
 class PublishMessageDecoder implements MessageDecoder {
+  // bool checkBit(int value, int bit) => (value & (1 << bit)) != 0;
+
   @override
   Future<Message> decode(Uint8List uint8list, Socket socket) async {
-    int currentIndex = 2;
+    int currentIndex = 0;
+//    print(uint8list.asMap());
+//    print(uint8list.toString());
+    var mqttControlByte =
+        uint8list.buffer.asByteData(currentIndex, 1).getUint8(0);
+    var qoS = (mqttControlByte.isBitSet(1) ? 1 : 0) +
+        (mqttControlByte.isBitSet(2) ? 1 : 0) * 2;
+//    print('qoS: ' + qoS.toString());
+    currentIndex++;
+    var decodedVariableByteHeader = decodeVariableByte(uint8list, currentIndex);
+    currentIndex = decodedVariableByteHeader['index']!;
+    var headerLength = decodedVariableByteHeader['decodedVariableByte'];
+//    print('Current Index from encoding: ' + currentIndex.toString());
+//    print('Header Length from encoding: ' + headerLength.toString());
+    // TODO: Use headerLength properly
     int topicLength = uint8list.buffer.asByteData(currentIndex, 2).getUint16(0);
+//    print('Topic Length: ' + topicLength.toString());
     currentIndex += 2;
-    String topic = utf8.decode(uint8list.buffer.asUint8List(currentIndex, topicLength));
+    String topic =
+        utf8.decode(uint8list.buffer.asUint8List(currentIndex, topicLength));
     currentIndex += topicLength;
+    /**/
+    var packetIdentifier =
+        uint8list.buffer.asByteData(currentIndex, 2).getUint16(0);
+//    print('Packet Identifier: ' + packetIdentifier.toString());
+    currentIndex += 2;
+    var recPayload = uint8list.buffer.asUint8List(currentIndex);
+    print('Publishing - ' +
+        utf8.decode(recPayload).toString() +
+        ' to topic: ' +
+        topic);
+
     var pub = PublishMessage(
-        qos: 0,
+        qos: qoS,
         topic: topic,
-        packetIdentifier: 1,
-        payload: uint8list.buffer.asUint8List(currentIndex));
+        packetIdentifier: packetIdentifier,
+        payload: recPayload); //uint8list.buffer.asUint8List(currentIndex));
+//    print('pub is ' + pub.payload.toString());
     for (var entry in SubscriptionManager.instance.subscriptions.entries) {
+      print('Publishing to subscriber ' + entry.key.clientId);
+      print('Topic: ' + topic);
+      print(entry.value.map((e) => e.topic));
+      // TODO: Fix for wildcard subscriptions
       if (entry.value.map((e) => e.topic).contains(topic)) {
+        print('publishing');
         entry.key.socket.add(pub.toByte());
+      } else {
+        print('Why are we not publishing?');
       }
     }
     return pub;
@@ -362,13 +610,16 @@ class UnsubscribeMessageDecoder implements MessageDecoder {
         currentIndex++;
         int payloadLength = buffer.asByteData(currentIndex, 2).getUint16(0);
         currentIndex += 2;
-        final topic = utf8.decode(buffer.asUint8List(currentIndex, payloadLength));
+        final topic =
+            utf8.decode(buffer.asUint8List(currentIndex, payloadLength));
         topics.add(topic);
         currentIndex += payloadLength;
       }
     } on Exception {
-      SessionManager.instance.sessions.removeWhere((client) => client.socket == socket);
-      SubscriptionManager.instance.subscriptions.removeWhere((key, value) => key.socket == socket);
+      SessionManager.instance.sessions
+          .removeWhere((client) => client.socket == socket);
+      SubscriptionManager.instance.subscriptions
+          .removeWhere((key, value) => key.socket == socket);
       socket.close();
     }
 
@@ -400,13 +651,21 @@ class PingrespMessage extends Message with RequestMessage {
   }
 }
 
+
+// TODO: Should this even extend MessageDecoder?
+// Would it be better as a standalone class that 
+// handles disconnecting client?
+
 class DisconnectMessageDecoder extends MessageDecoder {
   @override
   Future<Message> decode(Uint8List uint8list, Socket socket) async {
-    SessionManager.instance.sessions.removeWhere((client) => client.socket == socket);
-    SubscriptionManager.instance.subscriptions.removeWhere((key, value) => key.socket == socket);
+    SessionManager.instance.sessions
+        .removeWhere((client) => client.socket == socket);
+    SubscriptionManager.instance.subscriptions
+        .removeWhere((key, value) => key.socket == socket);
     socket.close();
     //TODO shouldn't return
+
     return PingrespMessage();
   }
 }
