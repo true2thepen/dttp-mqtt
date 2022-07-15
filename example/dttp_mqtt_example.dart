@@ -1,5 +1,6 @@
 import 'package:dttp_mqtt/dttp_mqtt.dart';
 
 void main() {
-  Server('localhost',1883);
+  var s = Server('0.0.0.0', 1885);
+  s.start();
 }
