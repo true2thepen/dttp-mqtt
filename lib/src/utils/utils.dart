@@ -1,7 +1,26 @@
 import 'dart:typed_data';
+import '../message/message_enums.dart';
 
 /// Utilities for MQTT
 ///
+
+
+extension ProtocolVersionUtil on ProtocolVersion {
+  static const _protocols = ProtocolVersion.values;
+
+  static ProtocolVersion getProtocolVersion(int version) {
+    final offset = 4;
+    return _protocols[version - offset];
+  }
+}
+
+extension Bits on int {
+  /// Returns true if bit is 1 else false
+  bool isBitSet(final int position) {
+    return (this & (1 << position)) != 0;
+  }
+}
+
 
 /// variable byte decode
 ///
