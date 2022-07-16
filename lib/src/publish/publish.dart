@@ -3,14 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import '../message/message.dart';
-import '../message/message_enums.dart';
+import 'package:dttp_mqtt/src/message/message.dart';
+import 'package:dttp_mqtt/src/message/message_enums.dart';
+import 'package:dttp_mqtt/src/subscriptions/subscription.dart';
+import 'package:dttp_mqtt/src/utils/utils.dart';
 
-import '../utils/utils.dart';
-
-import '../subscriptions/subscription.dart';
-
-
+/// PublishMessage
+/// 
 class PublishMessage extends Message with ResponseMessage, RequestMessage {
   final int qos;
   int duplicateFlag = 0;
@@ -64,6 +63,10 @@ class PublishMessage extends Message with ResponseMessage, RequestMessage {
 }
 
 
+/// Publish message decoder
+/// 
+/// Decode publish message and respond
+/// according to the QoS Level
 class PublishMessageDecoder implements MessageDecoder {
   @override
   Future<Message> decode(Uint8List uint8list, Socket socket) async {
@@ -132,3 +135,18 @@ class PublishMessageDecoder implements MessageDecoder {
   }
 }
 
+/// Response to publish message qoS level 1
+class PubackMessage extends Message with RequestMessage {
+  final int packetIdentifier;
+
+  PubackMessage({required this.packetIdentifier})
+      : super(type: MessageType.puback);
+
+  @override
+  Uint8List toByte() {
+    final variableHeader =
+        Uint16List.fromList([packetIdentifier]).buffer.asUint8List();
+    return Uint8List.fromList(
+        [type.fixedHeader(), variableHeader.lengthInBytes, ...variableHeader]);
+  }
+}

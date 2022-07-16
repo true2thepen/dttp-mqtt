@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import '../message/message_enums.dart';
-import '../message/message.dart';
+import 'package:dttp_mqtt/src/message/message_enums.dart';
+import 'package:dttp_mqtt/src/message/message.dart';
 
 class PingreqMessageDecoder extends MessageDecoder {
   final pingresp = PingrespMessage();

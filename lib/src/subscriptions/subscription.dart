@@ -3,19 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import '../client.dart';
+import 'package:dttp_mqtt/src/client.dart';
+import 'package:dttp_mqtt/src/message/message.dart';
+import 'package:dttp_mqtt/src/message/message_enums.dart';
+import 'package:dttp_mqtt/src/session_manager/session_manager.dart';
+import 'package:dttp_mqtt/src/utils/utils.dart';
 
-import '../utils/utils.dart';
-
-import '../message/message.dart';
-import '../message/message_enums.dart';
-import '../session_manager/session_manager.dart';
-
-
+/// Subscribe message
 class SubscribeMessage extends Message with ResponseMessage {
   SubscribeMessage() : super(type: MessageType.subscribe);
 }
 
+
+/// Subscription acknowledgement message
 class SubackMessage extends Message with RequestMessage {
   final List<int> qoss;
   final int packetIdentifier;
@@ -38,6 +38,7 @@ class SubackMessage extends Message with RequestMessage {
   }
 }
 
+/// Unsubscribe acknowledgement message
 class UnsubackMessage extends Message with RequestMessage {
   final int packetIdentifier;
 
@@ -53,7 +54,7 @@ class UnsubackMessage extends Message with RequestMessage {
   }
 }
 
-
+/// Subscription
 class Subscription {
   final int qos;
   final String topic;
@@ -61,6 +62,8 @@ class Subscription {
   Subscription({required this.qos, required this.topic});
 }
 
+
+/// Subscription Manager
 class SubscriptionManager {
   final Map<Client, Set<Subscription>> subscriptions = {};
 
@@ -88,7 +91,9 @@ class SubscriptionManager {
   }
 }
 
-//TODO: Handle wildcard subcriptions
+/// Subscription message decoder
+/// 
+/// TODO: Handle wildcard subcriptions
 class SubscribeMessageDecoder implements MessageDecoder {
   @override
   Future<SubackMessage> decode(Uint8List uint8list, Socket socket) async {
@@ -109,26 +114,17 @@ class SubscribeMessageDecoder implements MessageDecoder {
     var decodedVariableByteHeader = decodeVariableByte(uint8list, currentIndex);
     currentIndex = decodedVariableByteHeader['index']!;
     var headerLength = decodedVariableByteHeader['decodedVariableByte'];
-//    print('Current Index from encoding: ' + currentIndex.toString());
-//    print('Header Length from encoding: ' + headerLength.toString());
     final packetIdentifier = buffer.asByteData(currentIndex, 2).getUint16(0);
-    //
-//    print('packet identifier: $packetIdentifier');
     currentIndex++;
-    // TODO: Figure why the extra byte before payload in protocol 5
+    /// TODO: Figure why the extra byte before payload in protocol 5
     if (clientProtocol == 'mqtt_5') {
       currentIndex++;
     }
 
-    //print(buffer.lengthInBytes);
-
     final List<String> topics = [];
-
     final List<Subscription> subscriptions = [];
 
-    // print(currentIndex);
-
-    ///payload
+    /// payload
     while (currentIndex < buffer.lengthInBytes - 1) {
       currentIndex++;
       int payloadLength = buffer.asByteData(currentIndex, 2).getUint16(0);
@@ -136,7 +132,6 @@ class SubscribeMessageDecoder implements MessageDecoder {
       final topic =
           utf8.decode(buffer.asUint8List(currentIndex, payloadLength));
       topics.add(topic);
-//      print(topic);
       currentIndex += payloadLength;
       final qos = buffer.asByteData(currentIndex, 1).getUint8(0);
       subscriptions.add(Subscription(qos: qos, topic: topic));
@@ -152,6 +147,8 @@ class SubscribeMessageDecoder implements MessageDecoder {
   }
 }
 
+
+/// Unsubscribe message decoder
 class UnsubscribeMessageDecoder implements MessageDecoder {
   @override
   Future<UnsubackMessage> decode(Uint8List uint8list, Socket socket) async {
@@ -191,3 +188,4 @@ class UnsubscribeMessageDecoder implements MessageDecoder {
     return unsubackMessage;
   }
 }
+

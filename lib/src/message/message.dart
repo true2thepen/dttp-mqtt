@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'message_enums.dart';
 
+/// Base Message class
+/// 
 abstract class Message {
   final MessageType type;
   int fixedHeaderFlags = 0; // value between 0 and 15
@@ -13,13 +15,15 @@ abstract class Message {
   });
 }
 
-/// Base model for outgoing message types,
+/// Base model for outgoing message types
+/// 
 /// i.e. CONNACK, SUBACK, PUBACK...
 mixin RequestMessage {
   Uint8List toByte();
 }
 
-/// Base model for incoming message types,
+/// Base model for incoming message types
+/// 
 /// i.e. CONNECT, SUBSCRIBE, PUBLISH...
 mixin ResponseMessage {}
 

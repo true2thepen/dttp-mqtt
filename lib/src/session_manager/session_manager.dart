@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import '../client.dart';
+import 'package:dttp_mqtt/src/client.dart';
 
+/// Session manager
 class SessionManager {
   static final SessionManager _instance = SessionManager._();
   final Set<Client> sessions = {};
