@@ -321,3 +321,13 @@ class DisconnectMessageDecoder extends MessageDecoder {
   }
 }
 
+class DisconnectMessageDecoder2  {
+  Future<void> decode(Uint8List uint8list, Socket socket) async {
+    SessionManager.instance.sessions
+        .removeWhere((client) => client.socket == socket);
+    SubscriptionManager.instance.subscriptions
+        .removeWhere((key, value) => key.socket == socket);
+    socket.close();
+  }
+}
+
