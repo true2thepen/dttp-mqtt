@@ -29,3 +29,8 @@ extension MessageTypeUtil on MessageType {
 
   int fixedHeader([int flags = 0]) => (index << 4) | flags;
 }
+
+enum ProtocolVersion {
+  mqtt_3_1_1,
+  mqtt_5,
+}
