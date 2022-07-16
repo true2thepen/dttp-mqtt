@@ -1,14 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dttp_mqtt/src/client.dart';
-
-import '../session_manager/session_manager.dart';
 import 'message_enums.dart';
-import '../utils/utils.dart';
-
 
 abstract class Message {
   final MessageType type;
@@ -28,10 +22,6 @@ mixin RequestMessage {
 /// Base model for incoming message types,
 /// i.e. CONNECT, SUBSCRIBE, PUBLISH...
 mixin ResponseMessage {}
-
-
-
-
 
 abstract class MessageDecoder {
   Future<Message> decode(Uint8List uint8list, Socket socket);

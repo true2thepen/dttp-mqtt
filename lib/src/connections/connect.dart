@@ -7,7 +7,6 @@ import '../utils/utils.dart';
 import '../client.dart';
 import '../session_manager/session_manager.dart';
 import '../message/message_enums.dart';
-import '../message/messsage_consts.dart';
 import './connection_enums.dart';
 import '../message/message.dart';
 import '../subscriptions/subscription.dart';
