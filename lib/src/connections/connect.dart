@@ -7,7 +7,6 @@ import '../models/client.dart';
 import '../connections/connection_enums.dart';
 import '../message/message_enums.dart';
 import '../message/message.dart';
-import '../ping/ping.dart';
 import '../session_manager/session_manager.dart';
 import '../subscriptions/subscription.dart';
 import '../utils/utils.dart';
@@ -251,7 +250,6 @@ class ConnectMessageDecoder extends MessageDecoder {
     return connack;
   }
 }
-
 
 /// DisconnectMessageDecoder
 /// 
