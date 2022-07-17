@@ -12,7 +12,7 @@ import '../subscriptions/subscription.dart';
 import '../utils/utils.dart';
 
 /// Connect Message
-/// 
+///
 class ConnectMessage extends Message with ResponseMessage {
   final ProtocolVersion version;
 
@@ -22,7 +22,6 @@ class ConnectMessage extends Message with ResponseMessage {
           type: MessageType.connect,
         );
 }
-
 
 extension ConnectReturnCodeUtil on ConnectReturnCode {
   static const _connectionReturnCodes = ConnectReturnCode.values;
@@ -35,9 +34,8 @@ extension ConnectReturnCodeUtil on ConnectReturnCode {
   }
 }
 
-
 /// Connection Acknowledgement Message
-/// 
+///
 class ConnackMessage extends Message with RequestMessage {
   final bool cleanSession;
   final ConnectReturnCode returnCode;
@@ -59,19 +57,18 @@ class ConnackMessage extends Message with RequestMessage {
 }
 
 /// Connect message decoder
-/// 
+///
 class ConnectMessageDecoder extends MessageDecoder {
   @override
   Future<ConnackMessage> decode(Uint8List uint8list, Socket socket) async {
-
     int currentIndex = 8;
     var protocolVersion =
         ProtocolVersionUtil.getProtocolVersion(uint8list[currentIndex]).name;
 
     currentIndex++;
-    final bits = uint8list[currentIndex].toRadixString(2);
+    // final bits = uint8list[currentIndex].toRadixString(2);
     final cleanSession = uint8list[currentIndex].isBitSet(1);
-    final cleanWill = uint8list[currentIndex].isBitSet(2);
+    final willFlag = uint8list[currentIndex].isBitSet(2);
     final willQos = (uint8list[currentIndex].isBitSet(3)
         ? 1
         : 0 + (uint8list[currentIndex].isBitSet(4) ? 1 : 0));
@@ -91,6 +88,7 @@ class ConnectMessageDecoder extends MessageDecoder {
     if (protocolVersion == 'mqtt_5') {
       var connectPropertiesLength =
           uint8list.sublist(currentIndex++).buffer.asByteData().getUint8(0);
+
       /// Cycle through the connectionPropertiesLength until it is empty
       while (connectPropertiesLength > 0) {
         // Next byte is connection property type followed by x bytes
@@ -99,6 +97,7 @@ class ConnectMessageDecoder extends MessageDecoder {
         connectPropertiesLength--;
         switch (controlPropertyType) {
           case 17:
+
             /// four byte value for Session Expiry Interval
             /// must only be present once
             var controlPropertySEI = uint8list
@@ -112,6 +111,7 @@ class ConnectMessageDecoder extends MessageDecoder {
             break;
 
           case 33:
+
             /// 2 byte value for Receive Maximum
             /// must only be present once
             var controlPropertyRM = uint8list
@@ -125,6 +125,7 @@ class ConnectMessageDecoder extends MessageDecoder {
             break;
 
           case 39:
+
             /// 4 byte value for Maximum Packet Size
             /// must only be present once
             var controlPropertyMPS = uint8list
@@ -138,6 +139,7 @@ class ConnectMessageDecoder extends MessageDecoder {
             break;
 
           case 34:
+
             /// 2 byte value for Topic Alias Maximum
             /// must only be present once
             var controlPropertyTAM = uint8list
@@ -151,6 +153,7 @@ class ConnectMessageDecoder extends MessageDecoder {
             break;
 
           case 25:
+
             /// one byte value for Request Response Information
             /// valid values are 0 and 1
             /// must only be present once
@@ -163,6 +166,7 @@ class ConnectMessageDecoder extends MessageDecoder {
             break;
 
           case 23:
+
             /// one byte value for Request Problem Information
             /// valid values are 0 and 1
             /// must only be present once
@@ -176,6 +180,7 @@ class ConnectMessageDecoder extends MessageDecoder {
 
           /// TODO Handle User Key/Value
           case 38:
+
             /// variable byte key/value pairs
             /// can be seen multiple times
             /// first two bytes give length of key
@@ -195,6 +200,9 @@ class ConnectMessageDecoder extends MessageDecoder {
             currentIndex = currentIndex + valueLength + 1;
             connectPropertiesLength =
                 connectPropertiesLength - keyLength - valueLength - 4;
+
+            /// TODO: Fix to store key/vale in Will Properties User field
+
             break;
 
           /// TODO Handle Authentication DATA
@@ -217,6 +225,170 @@ class ConnectMessageDecoder extends MessageDecoder {
 
     currentIndex += clientIdStringLength;
 
+    /// TODO complete implementation of  will topic
+    /// If Will flag is set Will Properties is next
+    /// Handling is based upon which Protocol
+    /// Version 3.1.1 or Version 5
+    ///
+    if (willFlag) {
+      switch (protocolVersion) {
+        case 'mqtt_3_1_1':
+
+          /// Will Topic
+          final willTopicStringLength = uint8list
+              .sublist(currentIndex++, ++currentIndex)
+              .buffer
+              .asByteData()
+              .getUint16(0);
+          final willTopicString = utf8.decode(uint8list.sublist(
+              currentIndex, currentIndex + willTopicStringLength));
+          currentIndex += willTopicStringLength;
+
+          /// Will Message
+          final willMessageStringLength = uint8list
+              .sublist(currentIndex++, ++currentIndex)
+              .buffer
+              .asByteData()
+              .getUint16(0);
+          final willMessageString = utf8.decode(uint8list.sublist(
+              currentIndex, currentIndex + willMessageStringLength));
+          currentIndex += willMessageStringLength;
+
+          break;
+        case 'mqtt_5':
+
+          /// Will Properties
+          var decodedVariableByteHeader =
+              decodeVariableByte(uint8list, currentIndex);
+          currentIndex = decodedVariableByteHeader['index']!;
+          var willPropertiesLength =
+              decodedVariableByteHeader['decodedVariableByte']!;
+          while (willPropertiesLength > 0) {
+            int willPropertiesType =
+                uint8list.buffer.asByteData(currentIndex).getUint8(0);
+            willPropertiesLength--;
+            currentIndex++;
+            switch (willPropertiesType) {
+              case 1:
+                var payloadFormatIndicator =
+                    uint8list.buffer.asByteData(currentIndex).getUint8(0);
+                currentIndex++;
+                willPropertiesLength--;
+                break;
+
+              case 2:
+                var messageExpiryInterval =
+                    uint8list.buffer.asByteData(currentIndex).getUint32(0);
+                currentIndex += 4;
+                willPropertiesLength -= 4;
+                break;
+
+              case 3:
+                var decodedVariableByteHeader =
+                    decodeVariableByte(uint8list, currentIndex);
+                var oldIndex = currentIndex;
+                currentIndex = decodedVariableByteHeader['index']!;
+                willPropertiesLength =
+                    willPropertiesLength - (currentIndex - oldIndex);
+                int contentTypeLength =
+                    decodedVariableByteHeader['decodedVariableByte']!;
+                String willMessageString = utf8.decode(uint8list.sublist(
+                    currentIndex, currentIndex + contentTypeLength));
+                currentIndex += contentTypeLength;
+                willPropertiesLength -= contentTypeLength;
+                break;
+
+              case 8:
+                var decodedVariableByteHeader =
+                    decodeVariableByte(uint8list, currentIndex);
+                var oldIndex = currentIndex;
+                currentIndex = decodedVariableByteHeader['index']!;
+                willPropertiesLength =
+                    willPropertiesLength - (currentIndex - oldIndex);
+                int contentTypeLength =
+                    decodedVariableByteHeader['decodedVariableByte']!;
+                String responseTopicString = utf8.decode(uint8list.sublist(
+                    currentIndex, currentIndex + contentTypeLength));
+                currentIndex += contentTypeLength;
+                willPropertiesLength -= contentTypeLength;
+                break;
+
+              case 9:
+                int correlationDataLength =
+                    uint8list.buffer.asByteData(currentIndex).getUint16(0);
+                currentIndex += 2;
+                willPropertiesLength -= 2;
+                var correlationData = uint8list.sublist(
+                    currentIndex, currentIndex + correlationDataLength);
+                currentIndex += correlationDataLength;
+                willPropertiesLength -= correlationDataLength;
+                break;
+
+              case 24:
+                var willDelayInterval =
+                    uint8list.buffer.asByteData(currentIndex).getUint32(0);
+                currentIndex += 4;
+                willPropertiesLength -= 4;
+                break;
+
+              case 38:
+
+                /// variable byte key/value pairs
+                /// can be seen multiple times
+                /// first two bytes give length of key
+                /// once key is read the next two give length of value
+                var keyLength = uint8list
+                    .sublist(currentIndex++)
+                    .buffer
+                    .asByteData()
+                    .getUint16(0);
+                currentIndex++;
+                currentIndex = currentIndex + keyLength;
+                var valueLength = uint8list
+                    .sublist(currentIndex++)
+                    .buffer
+                    .asByteData()
+                    .getUint16(0);
+                currentIndex = currentIndex + valueLength + 1;
+                willPropertiesLength =
+                    willPropertiesLength - keyLength - valueLength - 4;
+
+                /// TODO: Fix to store key/vale in Will Properties User field
+                break;
+
+              default:
+              /// We should never reach this,
+              /// If we do we should disconnect with unknown error
+            }
+          }
+
+          /// Will Topic
+          final willTopicStringLength = uint8list
+              .sublist(currentIndex++, ++currentIndex)
+              .buffer
+              .asByteData()
+              .getUint16(0);
+          final willTopicString = utf8.decode(uint8list.sublist(
+              currentIndex, currentIndex + willTopicStringLength));
+          currentIndex += willTopicStringLength;
+
+          /// Will Message
+          final willMessageStringLength = uint8list
+              .sublist(currentIndex++, ++currentIndex)
+              .buffer
+              .asByteData()
+              .getUint16(0);
+          final willMessageString = utf8.decode(uint8list.sublist(
+              currentIndex, currentIndex + willMessageStringLength));
+          currentIndex += willMessageStringLength;
+          break;
+
+        default:
+        /// Should disconnect if we reach here
+        /// with reason code invalid protocol
+      }
+    }
+
     if (usernameFlag) {
       final usernameLength =
           uint8list.buffer.asByteData(currentIndex++).getUint16(0);
@@ -232,10 +404,15 @@ class ConnectMessageDecoder extends MessageDecoder {
       final passwordString = utf8.decode(
           uint8list.sublist(++currentIndex, currentIndex + passwordLength));
       currentIndex += passwordLength;
-
     }
 
-    /// TODO implement will topic
+    /// TODO: At this point we really should create the client in
+    /// the ClientManager. The ClientManager should be responsible
+    /// for setting up the session for the client. Since clients
+    /// can reconnect we do need to retain their previous information
+    /// somewhere. Session management doesn't seem to be the
+    /// appropriate place for that, hence the ClientManager.
+
     if (SessionManager.instance.containsClientId(clientIdString)) {
       /// TODO check flags and send error to socket
     }
@@ -252,7 +429,7 @@ class ConnectMessageDecoder extends MessageDecoder {
 }
 
 /// DisconnectMessageDecoder
-/// 
+///
 class DisconnectMessageDecoder {
   Future<void> decode(Uint8List uint8list, Socket socket) async {
     SessionManager.instance.sessions
