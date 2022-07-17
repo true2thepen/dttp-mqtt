@@ -30,5 +30,3 @@ mixin ResponseMessage {}
 abstract class MessageDecoder {
   Future<Message> decode(Uint8List uint8list, Socket socket);
 }
-
-main() {}

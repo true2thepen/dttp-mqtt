@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:dttp_mqtt/src/client.dart';
+import '../models/client.dart';
 
 /// Session manager
 class SessionManager {

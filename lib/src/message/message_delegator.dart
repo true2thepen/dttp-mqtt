@@ -14,7 +14,7 @@ class MessageDelegator {
   final subscribeDecoder= SubscribeMessageDecoder();
   final unsubDecoder = UnsubscribeMessageDecoder();
   final pingreqDecoder = PingreqMessageDecoder();
-  final disconnectDecoder = DisconnectMessageDecoder2();
+  final disconnectDecoder = DisconnectMessageDecoder();
 
   //TODO handle wrong protocols, versions, and more...
   Future<void> delegate(Uint8List uint8list, Socket socket) async {

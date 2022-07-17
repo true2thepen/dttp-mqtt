@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:dttp_mqtt/src/message/message_enums.dart';
+import '../message/message_enums.dart';
 
 /// Utilities for MQTT
 ///

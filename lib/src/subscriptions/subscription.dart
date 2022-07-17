@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dttp_mqtt/src/client.dart';
-import 'package:dttp_mqtt/src/message/message.dart';
-import 'package:dttp_mqtt/src/message/message_enums.dart';
-import 'package:dttp_mqtt/src/session_manager/session_manager.dart';
-import 'package:dttp_mqtt/src/utils/utils.dart';
+import '../models/client.dart';
+import '../message/message.dart';
+import '../message/message_enums.dart';
+import '../session_manager/session_manager.dart';
+import '../utils/utils.dart';
 
 /// Subscribe message
 class SubscribeMessage extends Message with ResponseMessage {

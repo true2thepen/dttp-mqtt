@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dttp_mqtt/src/message/message.dart';
-import 'package:dttp_mqtt/src/message/message_enums.dart';
-import 'package:dttp_mqtt/src/subscriptions/subscription.dart';
-import 'package:dttp_mqtt/src/utils/utils.dart';
+import '../message/message.dart';
+import '../message/message_enums.dart';
+import '../subscriptions/subscription.dart';
+import '../utils/utils.dart';
 
 /// PublishMessage
 /// 

@@ -3,14 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dttp_mqtt/src/client.dart';
-import 'package:dttp_mqtt/src/connections/connection_enums.dart';
-import 'package:dttp_mqtt/src/message/message_enums.dart';
-import 'package:dttp_mqtt/src/message/message.dart';
-import 'package:dttp_mqtt/src/ping/ping.dart';
-import 'package:dttp_mqtt/src/session_manager/session_manager.dart';
-import 'package:dttp_mqtt/src/subscriptions/subscription.dart';
-import 'package:dttp_mqtt/src/utils/utils.dart';
+import '../models/client.dart';
+import '../connections/connection_enums.dart';
+import '../message/message_enums.dart';
+import '../message/message.dart';
+import '../ping/ping.dart';
+import '../session_manager/session_manager.dart';
+import '../subscriptions/subscription.dart';
+import '../utils/utils.dart';
 
 /// Connect Message
 /// 
@@ -252,27 +252,10 @@ class ConnectMessageDecoder extends MessageDecoder {
   }
 }
 
-/// TODO: Should this even extend MessageDecoder?
-/// Would it be better as a standalone class that
-/// handles disconnecting client?
 
-class DisconnectMessageDecoder extends MessageDecoder {
-  @override
-  Future<Message> decode(Uint8List uint8list, Socket socket) async {
-    SessionManager.instance.sessions
-        .removeWhere((client) => client.socket == socket);
-    SubscriptionManager.instance.subscriptions
-        .removeWhere((key, value) => key.socket == socket);
-    socket.close();
-    /// TODO shouldn't return
-
-    return PingrespMessage();
-  }
-}
-
-/// Alternate class for DisconnectMessageDecoder
-/// no return requirement
-class DisconnectMessageDecoder2 {
+/// DisconnectMessageDecoder
+/// 
+class DisconnectMessageDecoder {
   Future<void> decode(Uint8List uint8list, Socket socket) async {
     SessionManager.instance.sessions
         .removeWhere((client) => client.socket == socket);
