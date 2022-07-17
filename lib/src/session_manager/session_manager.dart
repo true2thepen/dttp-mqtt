@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import '../models/client.dart';
+import '../models/session.dart';
 
 /// Session manager
 class SessionManager {
   static final SessionManager _instance = SessionManager._();
-  final Set<Client> sessions = {};
+  final Set<Session> sessions = {};
 
   SessionManager._();
 
@@ -15,7 +15,7 @@ class SessionManager {
     return sessions.any((other) => other.clientId == clientId);
   }
 
-  bool containsClient(Client client) {
+  bool containsClient(Session client) {
     return containsClientId(client.clientId);
   }
 
@@ -23,11 +23,12 @@ class SessionManager {
     return sessions.any((other) => other.socket == socket);
   }
 
-  Client getClient(Socket socket) {
+  Session getClient(Socket socket) {
     return sessions.firstWhere((other) => other.socket == socket);
   }
 }
-
+/*
 class Session {
   void refresh() {}
 }
+*/

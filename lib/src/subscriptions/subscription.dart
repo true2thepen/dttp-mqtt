@@ -14,7 +14,6 @@ class SubscribeMessage extends Message with ResponseMessage {
   SubscribeMessage() : super(type: MessageType.subscribe);
 }
 
-
 /// Subscription acknowledgement message
 class SubackMessage extends Message with RequestMessage {
   final List<int> qoss;
@@ -62,7 +61,6 @@ class Subscription {
   Subscription({required this.qos, required this.topic});
 }
 
-
 /// Subscription Manager
 class SubscriptionManager {
   final Map<Client, Set<Subscription>> subscriptions = {};
@@ -92,14 +90,15 @@ class SubscriptionManager {
 }
 
 /// Subscription message decoder
-/// 
+///
 /// TODO: Handle wildcard subcriptions
 class SubscribeMessageDecoder implements MessageDecoder {
   @override
   Future<SubackMessage> decode(Uint8List uint8list, Socket socket) async {
     final buffer = uint8list.buffer;
     //
-    String clientProtocol = SessionManager.instance.getClient(socket).protocol;
+    String clientProtocol =
+        SessionManager.instance.getClient(socket).client.protocol;
     int currentIndex = 0;
 //    print(uint8list.asMap());
 //    print(uint8list.toString());
@@ -116,6 +115,7 @@ class SubscribeMessageDecoder implements MessageDecoder {
     var headerLength = decodedVariableByteHeader['decodedVariableByte'];
     final packetIdentifier = buffer.asByteData(currentIndex, 2).getUint16(0);
     currentIndex++;
+
     /// TODO: Figure why the extra byte before payload in protocol 5
     if (clientProtocol == 'mqtt_5') {
       currentIndex++;
@@ -137,8 +137,8 @@ class SubscribeMessageDecoder implements MessageDecoder {
       subscriptions.add(Subscription(qos: qos, topic: topic));
     }
 
-    SubscriptionManager.instance
-        .addAll(SessionManager.instance.getClient(socket), subscriptions);
+    SubscriptionManager.instance.addAll(
+        SessionManager.instance.getClient(socket).client, subscriptions);
     final suback = SubackMessage(
         qoss: subscriptions.map((e) => e.qos).toList(),
         packetIdentifier: packetIdentifier);
@@ -147,13 +147,13 @@ class SubscribeMessageDecoder implements MessageDecoder {
   }
 }
 
-
 /// Unsubscribe message decoder
 class UnsubscribeMessageDecoder implements MessageDecoder {
   @override
   Future<UnsubackMessage> decode(Uint8List uint8list, Socket socket) async {
     final buffer = uint8list.buffer;
-
+    final clientId =  SessionManager.instance.getClient(socket).clientId;
+    
     int currentIndex = 2;
 
     final packetIdentifier = buffer.asByteData(currentIndex, 2).getUint16(0);
@@ -176,7 +176,7 @@ class UnsubscribeMessageDecoder implements MessageDecoder {
       SessionManager.instance.sessions
           .removeWhere((client) => client.socket == socket);
       SubscriptionManager.instance.subscriptions
-          .removeWhere((key, value) => key.socket == socket);
+          .removeWhere((key, value) => key.clientId == clientId);
       socket.close();
     }
 
@@ -188,4 +188,3 @@ class UnsubscribeMessageDecoder implements MessageDecoder {
     return unsubackMessage;
   }
 }
-

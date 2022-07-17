@@ -1,3 +1,5 @@
+/// enums for messages, subscriptions, etc.
+
 enum MessageType {
   reserved,
   connect,
@@ -33,4 +35,10 @@ extension MessageTypeUtil on MessageType {
 enum ProtocolVersion {
   mqtt_3_1_1,
   mqtt_5,
+}
+
+enum QoS {
+  level0,
+  level1,
+  level2
 }

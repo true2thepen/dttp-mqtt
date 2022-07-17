@@ -116,6 +116,7 @@ class PublishMessageDecoder implements MessageDecoder {
       // TODO: Fix for wildcard subscriptions
       if (entry.value.map((e) => e.topic).contains(topic)) {
         print('publishing');
+        
         entry.key.socket.add(pub.toByte());
       } else {
         print('Why are we not publishing?');

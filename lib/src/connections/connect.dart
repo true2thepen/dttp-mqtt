@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../models/client.dart';
+import '../client_manager/client_manager.dart';
 import '../connections/connection_enums.dart';
 import '../message/message_enums.dart';
 import '../message/message.dart';
@@ -357,6 +358,7 @@ class ConnectMessageDecoder extends MessageDecoder {
                 break;
 
               default:
+
               /// We should never reach this,
               /// If we do we should disconnect with unknown error
             }
@@ -384,6 +386,7 @@ class ConnectMessageDecoder extends MessageDecoder {
           break;
 
         default:
+
         /// Should disconnect if we reach here
         /// with reason code invalid protocol
       }
@@ -417,8 +420,10 @@ class ConnectMessageDecoder extends MessageDecoder {
       /// TODO check flags and send error to socket
     }
 
-    SessionManager.instance.sessions.add(Client(
-        clientId: clientIdString, socket: socket, protocol: protocolVersion));
+    ClientManager.instance.clients.add(Client(
+        clientId: clientIdString,
+        id: clientIdString,
+        protocol: protocolVersion));
 
     final connack = ConnackMessage(
         cleanSession: cleanSession,
@@ -432,10 +437,11 @@ class ConnectMessageDecoder extends MessageDecoder {
 ///
 class DisconnectMessageDecoder {
   Future<void> decode(Uint8List uint8list, Socket socket) async {
+    String clientId = SessionManager.instance.getClient(socket).clientId;
     SessionManager.instance.sessions
         .removeWhere((client) => client.socket == socket);
     SubscriptionManager.instance.subscriptions
-        .removeWhere((key, value) => key.socket == socket);
+        .removeWhere((key, value) => key.clientId == clientId);
     socket.close();
   }
 }
